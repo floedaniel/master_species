@@ -1,0 +1,9 @@
+.Rproj.user/
+.Rhistory
+.RData
+.Ruserdata
+# Live database: back it up separately, don't commit it
+data/*.sqlite
+data/*.sqlite-*
+# Source workbook stays local (public repo)
+data/*.xlsx
