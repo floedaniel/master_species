@@ -7,3 +7,5 @@ data/*.sqlite
 data/*.sqlite-*
 # Source workbook stays local (public repo)
 data/*.xlsx
+# Connection strings and passwords
+.Renviron

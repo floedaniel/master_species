@@ -74,6 +74,7 @@ test_that("the database rejects values outside the lookup lists", {
 
 test_that("a first-version database is converted to the tidy layout", {
   skip_if_not(file.exists(xlsx_fixture))
+  skip_if(on_postgres, "the first version only ever used SQLite")
   path <- withr::local_tempfile(fileext = ".sqlite")
   legacy <- dbConnect(SQLite(), path)
   raw <- read_excel(xlsx_fixture, sheet = "Master species") |>
@@ -87,7 +88,7 @@ test_that("a first-version database is converted to the tidy layout", {
   dbAppendTable(legacy, "statuses", tibble(name = unique(na.omit(raw$completed))))
   dbDisconnect(legacy)
 
-  con <- init_db(path, xlsx_fixture, schema_fixture)
+  con <- init_db(path, xlsx_fixture, schema_fixture, url = "")
   withr::defer(dbDisconnect(con))
 
   expect_equal(nrow(species_view(con)), 318)
@@ -115,4 +116,44 @@ test_that("ensure_status fills in missing assessments and statuses once", {
 
   expect_equal(first_six$status, rep("not started", 6))
   expect_equal(tbl(con, "assessments") |> count() |> pull(n), 318)
+})
+
+test_that("copy_database copies everything into an empty database", {
+  from <- local_test_db()
+  save_species(from, list(eppocode = "COPYME", ai = TRUE, hours = 1.5))
+  to_path <- withr::local_tempfile(fileext = ".sqlite")
+  to <- db_connect(to_path, url = "")
+  withr::defer(dbDisconnect(to))
+  create_schema(to, schema_fixture)
+
+  counts <- copy_database(from, to)
+
+  expect_equal(counts[["species"]], 319)
+  expect_equal(species_view(to), species_view(from), ignore_attr = TRUE)
+  expect_error(copy_database(from, to), "already has species")
+})
+
+test_that("new ids continue after imported ones", {
+  con <- local_test_db()
+
+  id <- save_species(con, list(eppocode = "NEXTID"))
+
+  expect_equal(id, 319)
+})
+
+test_that("parse_pg_url splits a Neon-style URL", {
+  url <- paste0(
+    "postgresql://owner:p%40ss@ep-x-pooler.eu-central-1.aws.neon.tech:5433/neondb",
+    "?sslmode=require&channel_binding=require"
+  )
+
+  args <- parse_pg_url(url)
+
+  expect_equal(args$user, "owner")
+  expect_equal(args$password, "p@ss")
+  expect_equal(args$host, "ep-x-pooler.eu-central-1.aws.neon.tech")
+  expect_equal(args$port, "5433")
+  expect_equal(args$dbname, "neondb")
+  expect_equal(args$sslmode, "require")
+  expect_error(parse_pg_url("not a url"), "not a postgresql")
 })

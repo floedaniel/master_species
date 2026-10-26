@@ -1,16 +1,29 @@
 # Master species
 
 Shiny app for the master species list: browse, add and edit species and their
-assessments. The data lives in a local SQLite database instead of Excel.
+assessments. The data lives in a PostgreSQL database on [Neon](https://neon.tech)
+(the old Excel file on SharePoint is no longer the source of truth).
 
 ## Getting started
 
-1. Copy `master_species.xlsx` into `data/` (it is not in the repo).
-2. Open `master_species.Rproj` and run `renv::restore()` once.
-3. Run the app with `shiny::runApp()`.
+1. Open `master_species.Rproj` and run `renv::restore()` once.
+2. Create a file `.Renviron` in the project folder (it is git-ignored, never commit it):
+   ```
+   DATABASE_URL=postgresql://...      # Neon branch "main": the live data
+   TEST_DATABASE_URL=postgresql://... # Neon branch "test": wiped by the tests
+   ```
+   Copy the strings from the Neon console (*Connect*). Restart R afterwards.
+3. Run the app with `shiny::runApp()`. Edits go straight to the live data.
 
-On first start the app imports the workbook into `data/master_species.sqlite`.
-From then on the database is the source of truth and the workbook is not read again.
+### Which database is used
+
+| `DATABASE_URL` | Database |
+|---|---|
+| set | PostgreSQL at that URL (`sql/schema_postgres.sql`) |
+| not set | local SQLite file `data/master_species.sqlite` (`sql/schema.sql`), imported from `data/master_species.xlsx` on first start |
+
+The live data was copied from the local SQLite file once with
+`Rscript scripts/migrate_to_neon.R` (it refuses to run if the target already has species).
 
 ## Using the app
 
@@ -21,7 +34,7 @@ From then on the database is the source of truth and the workbook is not read ag
 
 ## Data model
 
-Tidy tables, one per kind of thing (see `sql/schema.sql`):
+Tidy tables, one per kind of thing (see `sql/schema.sql`; keep `sql/schema_postgres.sql` in step):
 
 | Table | One row per |
 |---|---|
@@ -44,7 +57,10 @@ styler::style_dir(".", exclude_dirs = "renv")
 ```
 
 The tests use `data/master_species.xlsx` and are skipped when it is missing.
-Browser tests run the app on a temporary copy, never on the live database.
+They never use `DATABASE_URL`. By default they run on temporary SQLite files;
+with `TEST_DATABASE_URL` set, the database tests run on that PostgreSQL database
+instead and **drop and rebuild its tables**, so only ever point it at a test branch.
+Browser tests always run the app on a temporary SQLite copy.
 
 | Path | Contents |
 |---|---|
@@ -53,8 +69,10 @@ Browser tests run the app on a temporary copy, never on the live database.
 | `R/import.R` | splits the legacy workbook into tidy tables |
 | `R/export.R` | xlsx download |
 | `R/mod_species_table.R`, `R/mod_species_form.R` | Shiny modules |
+| `sql/` | database schema for SQLite and PostgreSQL |
+| `scripts/migrate_to_neon.R` | one-time copy of the local database to Neon |
 
 ## Backups
 
-`data/master_species.sqlite` is not in git. Back it up separately, for example by
-copying it to a shared drive, or keep a regular **Download xlsx** copy.
+Neon keeps a restore history for the live database (point-in-time restore; the
+window depends on your Neon plan). Keep a regular **Download xlsx** copy as well.
