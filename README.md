@@ -32,6 +32,17 @@ The live data was copied from the local SQLite file once with
 - **Edit selected**: click a row, then edit. The *History* tab lists every change.
 - **Download xlsx** saves a copy: an `overview` sheet like the table, plus one sheet per database table.
 
+## Deployment
+
+Live at <https://danielapp.shinyapps.io/master-species/> (shinyapps.io, account `danielapp`).
+After committing changes, redeploy with:
+
+```sh
+Rscript --vanilla scripts/deploy_shinyapps.R
+```
+
+The data stays in Neon, so redeploying never touches it.
+
 ## Data model
 
 Tidy tables, one per kind of thing (see `sql/schema.sql`; keep `sql/schema_postgres.sql` in step):
@@ -71,6 +82,7 @@ Browser tests always run the app on a temporary SQLite copy.
 | `R/mod_species_table.R`, `R/mod_species_form.R` | Shiny modules |
 | `sql/` | database schema for SQLite and PostgreSQL |
 | `scripts/migrate_to_neon.R` | one-time copy of the local database to Neon |
+| `scripts/deploy_shinyapps.R` | deploys the app to shinyapps.io |
 
 ## Backups
 
