@@ -157,3 +157,9 @@ test_that("parse_pg_url splits a Neon-style URL", {
   expect_equal(args$sslmode, "require")
   expect_error(parse_pg_url("not a url"), "not a postgresql")
 })
+
+test_that("without DATABASE_URL or a workbook, init_db fails loudly", {
+  path <- withr::local_tempfile(fileext = ".sqlite")
+
+  expect_error(init_db(path, xlsx = "missing.xlsx", schema = schema_fixture, url = ""), "set DATABASE_URL")
+})

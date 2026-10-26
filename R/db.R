@@ -104,6 +104,11 @@ init_db <- function(path = db_path, xlsx = xlsx_path, schema = schema_dir, url =
   create_schema(con, schema)
 
   if (fresh) {
+    # On a server the workbook is absent; a missing DATABASE_URL must fail loudly
+    # instead of starting an empty database whose edits would be lost
+    if (!file.exists(xlsx)) {
+      stop("No database: set DATABASE_URL, or put ", xlsx, " in place for a local SQLite copy.")
+    }
     write_tables(con, read_master_xlsx(xlsx))
   }
   if (legacy) {
