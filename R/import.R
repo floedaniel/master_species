@@ -6,7 +6,7 @@ read_master_xlsx <- function(path) {
   tidy_master(raw) |>
     c(list(
       assessors = tibble(name = unique(na.omit(codes$assessor))),
-      statuses = tibble(name = unique(na.omit(codes$status)))
+      statuses = tibble(name = unique(c(default_status, na.omit(codes$status))))
     ))
 }
 
@@ -27,17 +27,17 @@ tidy_master <- function(raw) {
       date_flagged = format(as.Date(date_flagged))
     )
 
+  # Every species gets an assessment; one without a status has not been started
   assessments <- raw |>
     transmute(
       species_id, assessor,
-      status = completed,
+      status = coalesce(completed, default_status),
       hours = suppressWarnings(as.numeric(hours)),
       batch = as.integer(batch),
       ai = ai == "YES",
       endnote = str_to_sentence(end_note),
       comment
-    ) |>
-    filter(if_any(-species_id, \(x) !is.na(x)))
+    )
 
   eppo_list_events <- raw |>
     select(species_id, added = eppo_year_add, deleted = eppo_year_del, transient = eppo_year_transient) |>

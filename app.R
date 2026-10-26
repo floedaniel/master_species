@@ -25,6 +25,7 @@ ui <- page_fillable(
       class = "d-flex justify-content-between align-items-center",
       span("Master species", textOutput("n_rows", inline = TRUE)),
       div(
+        downloadButton("download", "Download xlsx", class = "btn-outline-secondary btn-sm"),
         actionButton("edit", "Edit selected", class = "btn-outline-primary btn-sm"),
         actionButton("add", "Add species", class = "btn-primary btn-sm")
       )
@@ -47,6 +48,11 @@ server <- function(input, output, session) {
     "form", con, species,
     on_saved = \() refresh(refresh() + 1),
     changed_by = session$user %||% Sys.info()[["user"]]
+  )
+
+  output$download <- downloadHandler(
+    filename = \() sprintf("master_species_%s.xlsx", Sys.Date()),
+    content = \(file) write_master_xlsx(con, file)
   )
 
   observeEvent(input$add, form$open())

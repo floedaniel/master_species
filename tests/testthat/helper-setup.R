@@ -1,5 +1,6 @@
 suppressPackageStartupMessages({
   library(DBI)
+  library(DT)
   library(RSQLite)
   library(dplyr)
   library(dbplyr, warn.conflicts = FALSE)

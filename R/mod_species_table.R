@@ -1,5 +1,11 @@
-hidden_cols <- c("species_id", "assessment_id", "added_at", "updated_at")
-first_cols <- c("eppocode", "fullname", "assessor", "status", "hours", "batch", "ai", "endnote", "comment")
+# Show missing values as a grey dash; the data itself stays NA
+# R/ is sourced before app.R attaches packages, hence DT::
+na_render <- DT::JS(
+  "function(data, type) {",
+  "  if (type === 'display' && (data === null || data === '')) return '<span class=\"text-muted\">–</span>';",
+  "  return data;",
+  "}"
+)
 
 mod_species_table_ui <- function(id) {
   DTOutput(NS(id, "table"))
@@ -10,8 +16,7 @@ mod_species_table_ui <- function(id) {
 mod_species_table_server <- function(id, species) {
   moduleServer(id, function(input, output, session) {
     table_data <- reactive({
-      species() |>
-        select(any_of(first_cols), everything(), -any_of(hidden_cols))
+      display_columns(species())
     })
 
     # Rendered once; later changes go through the proxy so paging and filters stay put
@@ -20,7 +25,10 @@ mod_species_table_server <- function(id, species) {
         isolate(table_data()),
         rownames = FALSE, filter = "top", selection = "single",
         extensions = "FixedHeader",
-        options = list(pageLength = 25, scrollX = TRUE, fixedHeader = TRUE)
+        options = list(
+          pageLength = 25, scrollX = TRUE, fixedHeader = TRUE,
+          columnDefs = list(list(targets = "_all", render = na_render))
+        )
       )
     })
 

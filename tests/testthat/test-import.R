@@ -8,11 +8,14 @@ test_that("workbook splits into tidy tables", {
   expect_setequal(unique(na.omit(tables$species$eppo_list)), c("A1 list", "A2 list", "Alert list"))
 })
 
-test_that("only species with assessment data get an assessment row", {
+test_that("every species gets an assessment, unassessed ones 'not started'", {
   skip_if_not(file.exists(xlsx_fixture))
   tables <- read_master_xlsx(xlsx_fixture)
 
-  expect_lt(nrow(tables$assessments), nrow(tables$species))
+  expect_equal(nrow(tables$assessments), nrow(tables$species))
+  expect_false(anyNA(tables$assessments$status))
+  expect_gt(sum(tables$assessments$status == "not started"), 0)
+  expect_true("not started" %in% tables$statuses$name)
   expect_type(tables$assessments$ai, "logical")
   expect_setequal(unique(na.omit(tables$assessments$endnote)), "Updated")
 })

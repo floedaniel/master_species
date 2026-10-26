@@ -13,9 +13,19 @@ mod_species_form_server <- function(id, con, species, on_saved, changed_by = NA_
       val <- \(f) if (nrow(s) && !is.na(s[[f]])) s[[f]] else NA
       txt <- \(f) if (is.na(val(f))) "" else as.character(val(f))
       # Keep a stored value selectable even if it is missing from the lookup list
-      choices <- \(options, f) unique(c("", options, na.omit(val(f))))
-      choose <- \(f, label, options) selectInput(ns(f), label, choices(options, f), txt(f))
-      number <- \(f, label, step = 1) numericInput(ns(f), label, val(f), min = 0, step = step)
+      choices <- \(options, f, empty) c(empty, options, setdiff(na.omit(txt(f)), c("", options)))
+      # Native selects: DT's column filters load their own selectize, which lacks
+      # the a11y plugin shiny's selectize inputs need, so binding the form fails
+      choose <- \(f, label, options, empty = c("— not set —" = "")) {
+        selectInput(ns(f), label, choices(options, f, empty), txt(f), selectize = FALSE)
+      }
+      # Grey hint text in empty boxes; never part of the value
+      hint <- \(tag, text = "not set", selector = "input") {
+        tagAppendAttributes(tag, placeholder = text, .cssSelector = selector)
+      }
+      text <- \(f, label = f) hint(textInput(ns(f), label, txt(f)))
+      number <- \(f, label, step = 1) hint(numericInput(ns(f), label, val(f), min = 0, step = step))
+      statuses <- union(default_status, get_lookup(con, "statuses"))
 
       title <- if (nrow(s)) paste("Edit", s$eppocode) else "Add species"
       modalDialog(
@@ -25,18 +35,18 @@ mod_species_form_server <- function(id, con, species, on_saved, changed_by = NA_
             "Assessment",
             layout_columns(
               col_widths = c(4, 4, 4),
-              textInput(ns("eppocode"), "EPPO code *", txt("eppocode")),
+              hint(textInput(ns("eppocode"), "EPPO code *", txt("eppocode")), "e.g. XANTGA"),
               choose("assessor", "Assessor", get_lookup(con, "assessors")),
-              choose("status", "Status", get_lookup(con, "statuses")),
+              choose("status", "Status", statuses, empty = NULL),
               number("hours", "Hours", step = 0.5),
               number("batch", "Batch"),
-              selectInput(ns("ai"), "AI", c("", Yes = "TRUE", No = "FALSE"), txt("ai"))
+              choose("ai", "AI", c(Yes = "TRUE", No = "FALSE"))
             ),
-            textAreaInput(ns("comment"), "Comment", txt("comment"), width = "100%")
+            hint(textAreaInput(ns("comment"), "Comment", txt("comment"), width = "100%"), selector = "textarea")
           ),
           nav_panel(
             "Species",
-            map(text_fields, \(f) textInput(ns(f), f, txt(f))) |>
+            map(text_fields, text) |>
               c(list(col_widths = c(6, 6))) |>
               do.call(what = layout_columns)
           ),
@@ -47,7 +57,7 @@ mod_species_form_server <- function(id, con, species, on_saved, changed_by = NA_
               choose("eppo_list", "EPPO list", c("A1 list", "A2 list", "Alert list")),
               choose("eppo_status", "EPPO status", c("active", "removed_from_list")),
               # value = "" renders an empty date box; shiny warns but it works
-              suppressWarnings(dateInput(ns("date_flagged"), "Date flagged", value = txt("date_flagged"))),
+              hint(suppressWarnings(dateInput(ns("date_flagged"), "Date flagged", value = txt("date_flagged")))),
               number("eppo_year_added", "Year added"),
               number("eppo_year_deleted", "Year deleted"),
               number("eppo_year_transient", "Year transient")

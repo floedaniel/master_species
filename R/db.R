@@ -8,6 +8,7 @@ species_fields <- c(
 )
 assessment_fields <- c("assessor", "status", "hours", "batch", "ai", "endnote", "comment")
 event_fields <- c(added = "eppo_year_added", deleted = "eppo_year_deleted", transient = "eppo_year_transient")
+default_status <- "not started"
 
 # Connection ----------------------------------------------------------------
 
@@ -54,10 +55,31 @@ init_db <- function(path = db_path, xlsx = xlsx_path, schema = schema_path) {
       arrange(id) |>
       collect() |>
       select(-id, -added_at, -any_of("updated_at"))
-    write_tables(con, tidy_master(old))
+    new_statuses <- tibble(name = setdiff(default_status, get_lookup(con, "statuses")))
+    write_tables(con, c(tidy_master(old), list(statuses = new_statuses)))
     dbExecute(con, "DROP TABLE IF EXISTS ai_values")
   }
+  ensure_status(con)
   con
+}
+
+# Give every species an assessment with a status, so "not started" is a real
+# value rather than a missing one. Does nothing once the data is complete.
+ensure_status <- function(con) {
+  if (!default_status %in% get_lookup(con, "statuses")) {
+    dbAppendTable(con, "statuses", tibble(name = default_status))
+  }
+  unassessed <- tbl(con, "species") |>
+    anti_join(tbl(con, "assessments"), by = "species_id") |>
+    transmute(species_id, status = !!default_status)
+  blank <- tbl(con, "assessments") |>
+    filter(is.na(status)) |>
+    transmute(assessment_id, status = !!default_status)
+
+  dbWithTransaction(con, {
+    rows_append(tbl(con, "assessments"), unassessed, in_place = TRUE)
+    rows_update(tbl(con, "assessments"), blank, by = "assessment_id", unmatched = "ignore", in_place = TRUE)
+  })
 }
 
 # Reading -------------------------------------------------------------------
@@ -90,6 +112,13 @@ species_view <- function(con) {
     mutate(ai = as.logical(ai))
 }
 
+# Assessment columns first, internal ids and timestamps dropped
+display_columns <- function(view) {
+  first <- c("eppocode", "fullname", "assessor", "status", "hours", "batch", "ai", "endnote", "comment")
+  hidden <- c("species_id", "assessment_id", "added_at", "updated_at")
+  view |> select(any_of(first), everything(), -any_of(hidden))
+}
+
 # Writing -------------------------------------------------------------------
 
 # Returns an error message, or NULL when `values` can be saved
@@ -114,8 +143,8 @@ save_species <- function(con, values, species_id = NULL, changed_by = NA_charact
   fields <- c(species_fields, assessment_fields, event_fields)
   values <- map(set_names(fields), \(f) values[[f]]) |>
     map(\(v) if (length(v) == 0 || identical(v, "")) NA else v)
+  values$status <- coalesce(values$status, default_status)
   now <- format(Sys.time(), "%Y-%m-%d %H:%M:%S", tz = "UTC")
-  has_assessment <- some(values[assessment_fields], \(v) !is.na(v))
 
   dbWithTransaction(con, {
     if (is.null(species_id)) {
@@ -132,7 +161,7 @@ save_species <- function(con, values, species_id = NULL, changed_by = NA_charact
     if (!is.null(old) && !is.na(old$assessment_id)) {
       row <- tibble(assessment_id = old$assessment_id, !!!values[assessment_fields], updated_at = now)
       update_rows(con, "assessments", row, "assessment_id")
-    } else if (has_assessment) {
+    } else {
       dbAppendTable(con, "assessments", tibble(species_id, !!!values[assessment_fields]))
     }
 

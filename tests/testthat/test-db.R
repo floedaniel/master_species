@@ -93,4 +93,26 @@ test_that("a first-version database is converted to the tidy layout", {
   expect_equal(nrow(species_view(con)), 318)
   expect_true("species_legacy" %in% dbListTables(con))
   expect_false("ai_values" %in% dbListTables(con))
+  expect_false(anyNA(species_view(con)$status))
+})
+
+test_that("a new species without a status is 'not started'", {
+  con <- local_test_db()
+
+  id <- save_species(con, list(eppocode = "NOSTAT"))
+
+  expect_equal(species_view(con) |> filter(species_id == !!id) |> pull(status), "not started")
+})
+
+test_that("ensure_status fills in missing assessments and statuses once", {
+  con <- local_test_db()
+  dbExecute(con, "DELETE FROM assessments WHERE species_id <= 3")
+  dbExecute(con, "UPDATE assessments SET status = NULL WHERE species_id BETWEEN 4 AND 6")
+
+  ensure_status(con)
+  ensure_status(con)
+  first_six <- species_view(con) |> filter(species_id <= 6)
+
+  expect_equal(first_six$status, rep("not started", 6))
+  expect_equal(tbl(con, "assessments") |> count() |> pull(n), 318)
 })
